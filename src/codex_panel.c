@@ -40,6 +40,7 @@ struct _CodexPanel {
     GtkWidget *review_box;
     GtkWidget *changed_files;
     gboolean turn_active;
+    gboolean visible;
     char *turn_diff;
     guint render_timeout;
 };
@@ -524,8 +525,11 @@ CodexPanel *codex_panel_new(EditorWindow *win) {
     panel->chats = g_ptr_array_new_with_free_func(codex_chat_free);
     panel->revealer = gtk_revealer_new();
     gtk_revealer_set_transition_type(GTK_REVEALER(panel->revealer),
-                                     GTK_REVEALER_TRANSITION_TYPE_SLIDE_LEFT);
+                                     GTK_REVEALER_TRANSITION_TYPE_NONE);
+    gtk_revealer_set_transition_duration(GTK_REVEALER(panel->revealer), 0u);
     gtk_revealer_set_reveal_child(GTK_REVEALER(panel->revealer), TRUE);
+    gtk_widget_set_size_request(panel->revealer, 340, -1);
+    panel->visible = TRUE;
 
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     gtk_widget_add_css_class(box, "cleaf-codex-panel");
@@ -658,8 +662,14 @@ GtkWidget *codex_panel_widget(CodexPanel *panel) {
 
 void codex_panel_toggle(CodexPanel *panel) {
     if (!panel) return;
-    gboolean visible = gtk_revealer_get_reveal_child(GTK_REVEALER(panel->revealer));
-    gtk_revealer_set_reveal_child(GTK_REVEALER(panel->revealer), !visible);
+    panel->visible = !panel->visible;
+    gtk_revealer_set_reveal_child(GTK_REVEALER(panel->revealer), panel->visible);
+    gtk_widget_set_visible(panel->revealer, panel->visible);
+    if (panel->visible) {
+        gtk_widget_set_size_request(panel->revealer, 340, -1);
+        codex_panel_refresh_context(panel);
+    }
+    gtk_widget_queue_resize(panel->revealer);
 }
 
 void codex_panel_set_connection(CodexPanel *panel,
