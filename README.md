@@ -2,7 +2,7 @@
 
 # Cleaf
 
-Cleaf is a small, pure-C text editor for Linux built. It is under active development and is not yet ready for
+Cleaf is a small, pure-C text editor for Linux. It is under active development and is not yet ready for
 production use.
 
 Cleaf combines familiar text-editing tools with YAML-configurable syntax
