@@ -136,11 +136,8 @@ void populate_syntax_combo(EditorWindow *win, EditorTab *tab) {
     /*
      * Rebuilding the combo would normally emit the same changed signal used for
      * user selection. Block it so UI refresh does not change the tab syntax.
-     */
+    */
     win->syntax_combo_updating = TRUE;
-    g_signal_handlers_block_by_func(win->syntax_combo,
-                                    G_CALLBACK(on_syntax_changed),
-                                    win);
 
     GtkStringList *items = gtk_string_list_new(NULL);
 
@@ -170,9 +167,6 @@ void populate_syntax_combo(EditorWindow *win, EditorTab *tab) {
 
     g_object_unref(items);
 
-    g_signal_handlers_unblock_by_func(win->syntax_combo,
-                                      G_CALLBACK(on_syntax_changed),
-                                      win);
     win->syntax_combo_updating = FALSE;
 }
 

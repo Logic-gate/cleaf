@@ -314,22 +314,20 @@ index: false
 
 
 ## Screenshots
-
-![markdown preview](https://i.snipboard.io/pDesxH.jpg)
 Markdown Preview
-![latex shortcuts](https://i.snipboard.io/sFwmPQ.jpg)
+![markdown preview](https://i.snipboard.io/pDesxH.jpg)
 LaTeX
-![ref](https://i.snipboard.io/hNaXZc.jpg)
+![latex shortcuts](https://i.snipboard.io/sFwmPQ.jpg)
 Ref & Def
-![autocomplete](https://i.snipboard.io/GRmzwT.jpg)
+![ref](https://i.snipboard.io/hNaXZc.jpg)
 Auto-complete
-![git](https://i.snipboard.io/fReSDU.jpg)
+![autocomplete](https://i.snipboard.io/GRmzwT.jpg)
 git
-![codex1](https://i.snipboard.io/qiUWgn.jpg)
+![git](https://i.snipboard.io/fReSDU.jpg)
 Codex Approval
-![codex2](https://i.snipboard.io/jwJQ1L.jpg)
+![codex1](https://i.snipboard.io/qiUWgn.jpg)
 Codex Changes Approval
-![codex3](https://i.snipboard.io/uWe9Gq.jpg)
+![codex2](https://i.snipboard.io/jwJQ1L.jpg)
 Codex Diff View
-
+![codex3](https://i.snipboard.io/uWe9Gq.jpg)
 

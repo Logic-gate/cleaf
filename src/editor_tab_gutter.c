@@ -77,8 +77,8 @@ void on_gutter_draw(GtkDrawingArea *area, cairo_t *cr, int draw_width,
     GdkRectangle visible;
     gtk_text_view_get_visible_rect(view, &visible);
 
-    gint width = gtk_widget_get_allocated_width(widget);
-    gint height = gtk_widget_get_allocated_height(widget);
+    gint width = gtk_widget_get_width(widget);
+    gint height = gtk_widget_get_height(widget);
     gutter_draw_background(widget, cr, width, height);
 
     GtkTextIter iter;
@@ -392,7 +392,7 @@ void on_minimap_click(GtkGestureClick *gesture, int n_press, double x,
 
     if (!tab || !widget || widget != tab->minimap_view || !tab->buffer) return;
     gtk_gesture_set_state(GTK_GESTURE(gesture), GTK_EVENT_SEQUENCE_CLAIMED);
-    gint height = gtk_widget_get_allocated_height(widget);
+    gint height = gtk_widget_get_height(widget);
     if (height <= 0) return;
     gint lines = gtk_text_buffer_get_line_count(tab->buffer);
     if (lines <= 0) return;

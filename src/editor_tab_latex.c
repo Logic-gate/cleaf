@@ -167,7 +167,11 @@ static void open_pdf(EditorTab *tab, const char *pdf_path) {
         return;
     }
 
-    gtk_show_uri(app_window_gtk(tab->win), uri, GDK_CURRENT_TIME);
+    if (!g_app_info_launch_default_for_uri(uri, NULL, &error)) {
+        dialog_error(app_window_gtk(tab->win), "Could not open rendered PDF",
+                     error ? error->message : "No default PDF application");
+        g_clear_error(&error);
+    }
     g_free(uri);
 }
 

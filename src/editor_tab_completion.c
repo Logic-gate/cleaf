@@ -215,10 +215,10 @@ static void completion_place_popover(EditorTab *tab, GtkTextIter *cursor,
     if (!tab || !tab->text_view || !tab->popover_parent ||
         !gtk_widget_get_mapped(tab->text_view) ||
         !gtk_widget_get_mapped(tab->popover_parent) ||
-        gtk_widget_get_allocated_width(tab->text_view) <= 0 ||
-        gtk_widget_get_allocated_height(tab->text_view) <= 0 ||
-        gtk_widget_get_allocated_width(tab->popover_parent) <= 0 ||
-        gtk_widget_get_allocated_height(tab->popover_parent) <= 0) {
+        gtk_widget_get_width(tab->text_view) <= 0 ||
+        gtk_widget_get_height(tab->text_view) <= 0 ||
+        gtk_widget_get_width(tab->popover_parent) <= 0 ||
+        gtk_widget_get_height(tab->popover_parent) <= 0) {
         return;
     }
 
