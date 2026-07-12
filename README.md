@@ -1,6 +1,6 @@
 ![cleaf](https://i.snipboard.io/hdrCL5.jpg)
 
-# Cleaf
+# Cleaf [![C/C++ CI](https://github.com/Logic-gate/cleaf/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/Logic-gate/cleaf/actions/workflows/c-cpp.yml)
 
 Cleaf is a small, pure-C text editor for Linux. It is under active development and is not yet ready for
 production use.
