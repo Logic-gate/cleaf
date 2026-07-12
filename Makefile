@@ -1,6 +1,6 @@
 APP_NAME := cleaf
 APP_ID := io.github.cleaf.Editor
-VERSION := 0.16.3
+VERSION := 0.16.5
 PREFIX ?= /usr/local
 CC ?= cc
 BUILD_DIR := build

@@ -246,9 +246,9 @@ a GTK interface.
 
 | Area | Nano action | Cleaf action |
 |---|---|---|
-| File | New buffer | `File > New` |
-| File | Read file | `File > Open` |
-| File | Write out | `File > Save` or `File > Save As` |
+| File | New buffer | `File > New` or `Ctrl+N`|
+| File | Read file | `File > Open` or `Ctrl+O`|
+| File | Write out | `File > Save` or `File > Save As` or `Ctrl+S`|
 | File | Exit | `File > Quit`, with an unsaved-changes prompt |
 | Edit | Cut text | `Ctrl+X` or right-click |
 | Edit | Copy text | `Ctrl+C` or right-click |
@@ -316,8 +316,20 @@ index: false
 ## Screenshots
 
 ![markdown preview](https://i.snipboard.io/pDesxH.jpg)
+Markdown Preview
 ![latex shortcuts](https://i.snipboard.io/sFwmPQ.jpg)
+LaTeX
 ![ref](https://i.snipboard.io/hNaXZc.jpg)
+Ref & Def
 ![autocomplete](https://i.snipboard.io/GRmzwT.jpg)
+Auto-complete
 ![git](https://i.snipboard.io/fReSDU.jpg)
+git
+![codex1](https://i.snipboard.io/qiUWgn.jpg)
+Codex Approval
+![codex2](https://i.snipboard.io/jwJQ1L.jpg)
+Codex Changes Approval
+![codex3](https://i.snipboard.io/uWe9Gq.jpg)
+Codex Diff View
+
 

@@ -1,5 +1,51 @@
+typedef struct {
+    GtkWidget *scrolled;
+    gdouble value;
+} ProjectScrollRestore;
+
+static GtkWidget *project_tree_scrolled_window(EditorWindow *win) {
+    GtkWidget *widget = win ? win->project_list : NULL;
+    while (widget) {
+        if (GTK_IS_SCROLLED_WINDOW(widget)) return widget;
+        widget = gtk_widget_get_parent(widget);
+    }
+    return NULL;
+}
+
+static gboolean project_restore_scroll_cb(gpointer user_data) {
+    ProjectScrollRestore *restore = user_data;
+    if (!restore || !restore->scrolled) {
+        g_free(restore);
+        return G_SOURCE_REMOVE;
+    }
+    GtkAdjustment *adj = gtk_scrolled_window_get_vadjustment(
+        GTK_SCROLLED_WINDOW(restore->scrolled));
+    if (adj) {
+        gdouble max = gtk_adjustment_get_upper(adj) - gtk_adjustment_get_page_size(adj);
+        if (max < 0.0) max = 0.0;
+        gtk_adjustment_set_value(adj, CLAMP(restore->value, 0.0, max));
+    }
+    g_object_unref(restore->scrolled);
+    g_free(restore);
+    return G_SOURCE_REMOVE;
+}
+
+static void project_restore_scroll_later(GtkWidget *scrolled, gdouble value) {
+    if (!scrolled) return;
+    ProjectScrollRestore *restore = g_new0(ProjectScrollRestore, 1);
+    restore->scrolled = g_object_ref(scrolled);
+    restore->value = value;
+    g_idle_add_full(G_PRIORITY_LOW, project_restore_scroll_cb, restore, NULL);
+}
+
 static void project_tree_rebuild(EditorWindow *win) {
     if (!win || !win->project_list) return;
+
+    GtkWidget *scrolled = project_tree_scrolled_window(win);
+    GtkAdjustment *adj = scrolled
+        ? gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(scrolled))
+        : NULL;
+    gdouble scroll_value = adj ? gtk_adjustment_get_value(adj) : 0.0;
 
     project_context_popover_close_for_list(win);
 
@@ -19,6 +65,8 @@ static void project_tree_rebuild(EditorWindow *win) {
         const char *root = project_root_at(win, i);
         if (root) add_visible_path(&build, root, 0u);
     }
+
+    project_restore_scroll_later(scrolled, scroll_value);
 }
 
 static void on_project_row_activated(GtkListBox *list_box,

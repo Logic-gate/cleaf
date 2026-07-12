@@ -49,6 +49,20 @@ static GtkWidget *project_icon_widget_for_path(const char *path,
     return icon;
 }
 
+static const char *git_status_css_class(const char *status) {
+    if (!status || status[0] == '\0') return NULL;
+    switch (status[0]) {
+    case '?': return "cleaf-git-status-untracked";
+    case '!': return "cleaf-git-status-conflict";
+    case 'R': return "cleaf-git-status-renamed";
+    case 'D': return "cleaf-git-status-deleted";
+    case 'A': return "cleaf-git-status-added";
+    case 'S': return "cleaf-git-status-staged";
+    case 'M': return "cleaf-git-status-modified";
+    default: return NULL;
+    }
+}
+
 
 static void append_project_row(ProjectBuild *build,
                                const char *path,
@@ -103,6 +117,8 @@ static void append_project_row(ProjectBuild *build,
         const char *git_status = cleaf_git_status_for_file(build->win, path);
         if (git_status && git_status[0] != '\0') {
             GtkWidget *git = row_label(git_status, "cleaf-git-status");
+            const char *status_class = git_status_css_class(git_status);
+            if (status_class) gtk_widget_add_css_class(git, status_class);
             gtk_widget_set_size_request(git, 18, -1);
             gtk_box_append(GTK_BOX(line), git);
         }
@@ -195,4 +211,3 @@ static gboolean project_root_exists(EditorWindow *win, const char *canonical) {
     }
     return FALSE;
 }
-

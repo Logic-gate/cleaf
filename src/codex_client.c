@@ -4,6 +4,23 @@
 
 #include "codex_protocol.h"
 
+/*
+ * Note-to-self: Codex can use legacy applyPatchApproval: approved-denied                                                                                                            
+ * We were sending accept-decline 
+ * So clicking Allow once did not resume the Codex action correctly.                                    
+ * We were also reading optional JSON fields with json_object_get_object_member() and json_object_get_array_member() 
+ * without checking that the member existed first. Codex can send string IDs too. 
+ * Allow once and Deny could send a response with the wrong ID and appear to do nothing. 
+ * We now store the original approval request ID as a JsonNode.
+ * Send approval responses using the exact original ID type and value.
+ * Clear approval state safely after response or server resolution.
+ * This should fix the Codex freeze.
+ * 
+ * We need to modulate AI-assistance. When implementing Claude or Mind2,
+ * we should not rewrite everything from scratch. At some point, all Codex code
+ * will be split into AI-UI and AI-specifics.
+ */
+
 struct _CodexClient {
     GSubprocess *process;
     GDataInputStream *output;
@@ -24,6 +41,7 @@ struct _CodexClient {
     gboolean turn_pending;
     gboolean interrupt_pending;
     guint64 approval_request_id;
+    JsonNode *approval_request_id_node; /* Storing exact ID node to prevent legacy string-ID drops */
     char *approval_method;
 };
 
@@ -44,6 +62,7 @@ static void codex_client_unref(CodexClient *client) {
     g_free(client->cwd);
     g_free(client->thread_id);
     g_free(client->turn_id);
+    if (client->approval_request_id_node) json_node_free(client->approval_request_id_node);
     g_free(client->approval_method);
     g_free(client);
 }
@@ -97,6 +116,7 @@ static void codex_client_start_thread(CodexClient *client) {
     (void)codex_client_write(client, request);
 }
 
+/* Legacy decline fallback wrapper for simple ID-based responses */
 static void codex_client_decline_request(CodexClient *client, guint64 id) {
     JsonNode *result = codex_protocol_object_params();
     json_object_set_string_member(json_node_get_object(result),
@@ -104,6 +124,135 @@ static void codex_client_decline_request(CodexClient *client, guint64 id) {
     char *response = codex_protocol_response(id, result);
     json_node_free(result);
     (void)codex_client_write(client, response);
+}
+
+static void codex_client_clear_approval(CodexClient *client) {
+    if (!client) return;
+    client->approval_request_id = 0u;
+    g_clear_pointer(&client->approval_request_id_node, json_node_free);
+    g_clear_pointer(&client->approval_method, g_free);
+}
+
+/* Reconstructs a response by explicitly mirroring the exact incoming id type/node */
+static char *codex_client_response_for_id(JsonNode *id_node, JsonNode *result) {
+    if (!id_node || !result) return NULL;
+    JsonBuilder *builder = json_builder_new();
+    json_builder_begin_object(builder);
+    json_builder_set_member_name(builder, "id");
+    json_builder_add_value(builder, json_node_copy(id_node));
+    json_builder_set_member_name(builder, "result");
+    json_builder_add_value(builder, json_node_copy(result));
+    json_builder_end_object(builder);
+
+    JsonGenerator *generator = json_generator_new();
+    JsonNode *root = json_builder_get_root(builder);
+    json_generator_set_root(generator, root);
+    char *json = json_generator_to_data(generator, NULL);
+    char *line = g_strconcat(json, "\n", NULL);
+
+    g_free(json);
+    json_node_free(root);
+    g_object_unref(generator);
+    g_object_unref(builder);
+    return line;
+}
+
+static JsonObject *codex_json_object_member(JsonObject *object,
+                                            const char *member) {
+    if (!object || !member || !json_object_has_member(object, member)) return NULL;
+    JsonNode *node = json_object_get_member(object, member);
+    return node && JSON_NODE_HOLDS_OBJECT(node) ? json_node_get_object(node) : NULL;
+}
+
+static JsonArray *codex_json_array_member(JsonObject *object,
+                                          const char *member) {
+    if (!object || !member || !json_object_has_member(object, member)) return NULL;
+    JsonNode *node = json_object_get_member(object, member);
+    return node && JSON_NODE_HOLDS_ARRAY(node) ? json_node_get_array(node) : NULL;
+}
+
+/* Checks if incoming method string matches any known approval flavors */
+static gboolean codex_client_method_is_approval(const char *method) {
+    return method &&
+        (g_str_equal(method, "item/commandExecution/requestApproval") ||
+         g_str_equal(method, "item/fileChange/requestApproval") ||
+         g_str_equal(method, "execCommandApproval") ||
+         g_str_equal(method, "applyPatchApproval"));
+}
+
+static gboolean codex_client_method_uses_review_decision(const char *method) {
+    return method &&
+        (g_str_equal(method, "execCommandApproval") ||
+         g_str_equal(method, "applyPatchApproval"));
+}
+
+/* Maps internal accept/decline states into legacy approved/denied text strings */
+static const char *codex_client_response_decision(const char *method,
+                                                  const char *decision) {
+    if (!codex_client_method_uses_review_decision(method)) return decision;
+    if (g_str_equal(decision, "accept")) return "approved";
+    if (g_str_equal(decision, "acceptForSession")) return "approved_for_session";
+    if (g_str_equal(decision, "decline")) return "denied";
+    if (g_str_equal(decision, "cancel")) return "abort";
+    return NULL;
+}
+
+static char *codex_client_command_text(JsonObject *params) {
+    if (!params) return NULL;
+    const char *command = json_object_get_string_member_with_default(
+        params, "command", NULL);
+    if (command) return g_strdup(command);
+    JsonArray *command_array = codex_json_array_member(params, "command");
+    if (!command_array) return NULL;
+    GString *out = g_string_new(NULL);
+    if (!out) return NULL;
+    for (guint i = 0u; i < json_array_get_length(command_array); i++) {
+        const char *part = json_array_get_string_element(command_array, i);
+        if (!part) continue;
+        if (out->len > 0u) g_string_append_c(out, ' ');
+        g_string_append(out, part);
+    }
+    return g_string_free(out, FALSE);
+}
+
+static guint codex_client_file_change_count(JsonObject *params) {
+    if (!params) return 0u;
+    JsonObject *changes = codex_json_object_member(params, "fileChanges");
+    if (changes) return json_object_get_size(changes);
+    JsonArray *array = codex_json_array_member(params, "changes");
+    return array ? json_array_get_length(array) : 0u;
+}
+
+static char *codex_client_approval_detail(const char *method,
+                                          JsonObject *params) {
+    const char *reason = params
+        ? json_object_get_string_member_with_default(params, "reason", NULL)
+        : NULL;
+    const char *grant_root = params
+        ? json_object_get_string_member_with_default(params, "grantRoot", NULL)
+        : NULL;
+    if (g_str_equal(method, "item/commandExecution/requestApproval") ||
+        g_str_equal(method, "execCommandApproval")) {
+        char *command = codex_client_command_text(params);
+        char *detail = g_strdup_printf("Allow command%s%s%s",
+                                       command ? ": " : reason ? ": " : "",
+                                       command ? command : reason ? reason : "",
+                                       grant_root ? " (extra permissions requested)" : "");
+        g_free(command);
+        return detail;
+    }
+    guint count = codex_client_file_change_count(params);
+    if (grant_root && grant_root[0] != '\0') {
+        return g_strdup_printf(
+            "Allow file changes outside the workspace root: %s",
+            grant_root);
+    }
+    if (count > 0u) {
+        return g_strdup_printf("Allow proposed file changes: %u file%s",
+                               count, count == 1u ? "" : "s");
+    }
+    return g_strdup_printf("Allow proposed file changes%s%s",
+                           reason ? ": " : "", reason ? reason : "");
 }
 
 static char *codex_client_item_summary(JsonObject *item) {
@@ -118,7 +267,7 @@ static char *codex_client_item_summary(JsonObject *item) {
                                status ? " " : "", status ? status : "", command);
     }
     if (g_str_equal(type, "fileChange")) {
-        JsonArray *changes = json_object_get_array_member(item, "changes");
+        JsonArray *changes = codex_json_array_member(item, "changes");
         guint count = changes ? json_array_get_length(changes) : 0u;
         return g_strdup_printf("File changes%s%s: %u file%s",
                                status ? " " : "", status ? status : "",
@@ -132,7 +281,7 @@ static void codex_client_handle_notification(CodexClient *client,
                                              JsonObject *object) {
     const char *method = json_object_get_string_member_with_default(
         object, "method", NULL);
-    JsonObject *params = json_object_get_object_member(object, "params");
+    JsonObject *params = codex_json_object_member(object, "params");
     if (!method || !params) return;
 
     if (g_str_equal(method, "turn/diff/updated")) {
@@ -144,7 +293,7 @@ static void codex_client_handle_notification(CodexClient *client,
 
     if (g_str_equal(method, "item/started") ||
         g_str_equal(method, "item/completed")) {
-        JsonObject *item = json_object_get_object_member(params, "item");
+        JsonObject *item = codex_json_object_member(params, "item");
         if (item) {
             const char *type = json_object_get_string_member_with_default(
                 item, "type", "");
@@ -158,8 +307,7 @@ static void codex_client_handle_notification(CodexClient *client,
         return;
     }
     if (g_str_equal(method, "serverRequest/resolved")) {
-        client->approval_request_id = 0u;
-        g_clear_pointer(&client->approval_method, g_free);
+        codex_client_clear_approval(client);
         codex_client_emit(client, CODEX_EVENT_APPROVAL_RESOLVED, NULL);
         return;
     }
@@ -171,7 +319,7 @@ static void codex_client_handle_notification(CodexClient *client,
         return;
     }
     if (g_str_equal(method, "turn/started")) {
-        JsonObject *turn = json_object_get_object_member(params, "turn");
+        JsonObject *turn = codex_json_object_member(params, "turn");
         const char *id = turn
             ? json_object_get_string_member_with_default(turn, "id", NULL) : NULL;
         g_free(client->turn_id);
@@ -185,7 +333,7 @@ static void codex_client_handle_notification(CodexClient *client,
         return;
     }
     if (!g_str_equal(method, "turn/completed")) return;
-    JsonObject *turn = json_object_get_object_member(params, "turn");
+    JsonObject *turn = codex_json_object_member(params, "turn");
     const char *status = turn
         ? json_object_get_string_member_with_default(turn, "status", "failed")
         : "failed";
@@ -210,28 +358,26 @@ static void codex_client_handle_message(CodexClient *client, JsonNode *root) {
         codex_client_handle_notification(client, object);
         return;
     }
-    gint64 id = json_object_get_int_member(object, "id");
+    JsonNode *id_node = json_object_get_member(object, "id");
+    gint64 id = 0;
+    if (id_node && JSON_NODE_HOLDS_VALUE(id_node)) {
+        GType id_type = json_node_get_value_type(id_node);
+        if (id_type == G_TYPE_INT64 || id_type == G_TYPE_INT ||
+            id_type == G_TYPE_UINT || id_type == G_TYPE_UINT64 ||
+            id_type == G_TYPE_LONG || id_type == G_TYPE_ULONG) {
+            id = json_node_get_int(id_node);
+        }
+    }
     if (json_object_has_member(object, "method")) {
         const char *method = json_object_get_string_member_with_default(
             object, "method", "");
-        JsonObject *params = json_object_get_object_member(object, "params");
-        gboolean approval =
-            g_str_equal(method, "item/commandExecution/requestApproval") ||
-            g_str_equal(method, "item/fileChange/requestApproval");
-        if (approval && client->approval_request_id == 0u) {
+        JsonObject *params = codex_json_object_member(object, "params");
+        gboolean approval = codex_client_method_is_approval(method);
+        if (approval && !client->approval_request_id_node) {
             client->approval_request_id = (guint64)id;
+            client->approval_request_id_node = id_node ? json_node_copy(id_node) : NULL;
             client->approval_method = g_strdup(method);
-            const char *reason = params
-                ? json_object_get_string_member_with_default(params, "reason", NULL)
-                : NULL;
-            const char *command = params
-                ? json_object_get_string_member_with_default(params, "command", NULL)
-                : NULL;
-            char *detail = g_strdup_printf("%s%s%s",
-                g_str_has_prefix(method, "item/fileChange")
-                    ? "Allow proposed file changes" : "Allow command",
-                command ? ": " : reason ? ": " : "?",
-                command ? command : reason ? reason : "");
+            char *detail = codex_client_approval_detail(method, params);
             codex_client_emit(client, CODEX_EVENT_APPROVAL_REQUESTED, detail);
             g_free(detail);
         } else {
@@ -243,7 +389,7 @@ static void codex_client_handle_message(CodexClient *client, JsonNode *root) {
         if ((guint64)id == client->interrupt_request_id) {
             client->interrupt_request_id = 0u;
             client->interrupt_pending = FALSE;
-            JsonObject *failure = json_object_get_object_member(object, "error");
+            JsonObject *failure = codex_json_object_member(object, "error");
             const char *message = failure
                 ? json_object_get_string_member_with_default(
                       failure, "message", "Stop request was rejected")
@@ -273,9 +419,9 @@ static void codex_client_handle_message(CodexClient *client, JsonNode *root) {
         return;
     }
     if (id >= 3 && json_object_has_member(object, "result")) {
-        JsonObject *result = json_object_get_object_member(object, "result");
+        JsonObject *result = codex_json_object_member(object, "result");
         JsonObject *turn = result && json_object_has_member(result, "turn")
-            ? json_object_get_object_member(result, "turn") : NULL;
+            ? codex_json_object_member(result, "turn") : NULL;
         const char *turn_id = turn
             ? json_object_get_string_member_with_default(turn, "id", NULL) : NULL;
         if (turn_id && !client->turn_id) {
@@ -293,9 +439,9 @@ static void codex_client_handle_message(CodexClient *client, JsonNode *root) {
     if (id != THREAD_START_REQUEST_ID ||
         !json_object_has_member(object, "result")) return;
 
-    JsonObject *result = json_object_get_object_member(object, "result");
+    JsonObject *result = codex_json_object_member(object, "result");
     JsonObject *thread = result
-        ? json_object_get_object_member(result, "thread") : NULL;
+        ? codex_json_object_member(result, "thread") : NULL;
     const char *thread_id = thread
         ? json_object_get_string_member_with_default(thread, "id", NULL) : NULL;
     if (!thread_id) {
@@ -431,18 +577,21 @@ gboolean codex_client_resume_thread(CodexClient *client,
 
 gboolean codex_client_resolve_approval(CodexClient *client,
                                        const char *decision) {
-    if (!client || client->approval_request_id == 0u || !decision) return FALSE;
+    if (!client || !client->approval_request_id_node || !decision) return FALSE;
     if (!g_str_equal(decision, "accept") &&
         !g_str_equal(decision, "acceptForSession") &&
         !g_str_equal(decision, "decline") &&
         !g_str_equal(decision, "cancel")) return FALSE;
+    const char *response_decision = codex_client_response_decision(
+        client->approval_method, decision);
+    if (!response_decision) return FALSE;
     JsonNode *result = codex_protocol_object_params();
     json_object_set_string_member(json_node_get_object(result),
-                                  "decision", decision);
-    char *response = codex_protocol_response(client->approval_request_id, result);
+                                  "decision", response_decision);
+    char *response = codex_client_response_for_id(client->approval_request_id_node,
+                                                  result);
     json_node_free(result);
-    client->approval_request_id = 0u;
-    g_clear_pointer(&client->approval_method, g_free);
+    codex_client_clear_approval(client);
     gboolean sent = codex_client_write(client, response);
     if (sent) codex_client_emit(client, CODEX_EVENT_APPROVAL_RESOLVED, NULL);
     return sent;

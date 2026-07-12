@@ -294,12 +294,22 @@ void cleaf_apply_editor_css(const char *editor_bg_color,
         effective_project_selected_bg, effective_project_selected_bg,
         effective_project_selected_fg,
         effective_project_fg);
+    g_string_append(css,
+        ".cleaf-project-tree label.cleaf-git-status { "
+        "font-weight: 800; opacity: 1.0; }\n"
+        ".cleaf-project-tree label.cleaf-git-status-modified { color: #f9c74f; }\n"
+        ".cleaf-project-tree label.cleaf-git-status-added { color: #57cc99; }\n"
+        ".cleaf-project-tree label.cleaf-git-status-deleted { color: #ff6b6b; }\n"
+        ".cleaf-project-tree label.cleaf-git-status-renamed { color: #4cc9f0; }\n"
+        ".cleaf-project-tree label.cleaf-git-status-conflict { color: #ff4d6d; }\n"
+        ".cleaf-project-tree label.cleaf-git-status-untracked { color: #77bdfb; }\n"
+        ".cleaf-project-tree label.cleaf-git-status-staged { color: #cba6f7; }\n");
     g_string_append_printf(css,
         ".cleaf-root notebook > header { background: %s; background-color: %s; color: %s; }\n"
         ".cleaf-root notebook > header.top > tabs > tab { background: %s; background-color: %s; color: %s; }\n"
         ".cleaf-root notebook > header.top > tabs > tab:checked { background: %s; background-color: %s; color: %s; }\n"
-        ".cleaf-tab label { color: %s; }\n"
-        ".cleaf-root notebook > header.top > tabs > tab:checked .cleaf-tab label { color: %s; }\n",
+        ".cleaf-tab label { color: %s; opacity: 0.68; }\n"
+        ".cleaf-root notebook > header.top > tabs > tab:checked .cleaf-tab label { color: %s; opacity: 1.0; }\n",
         effective_tabbar, effective_tabbar, effective_tabbar_fg,
         effective_tabbar, effective_tabbar, effective_tabbar_fg,
         effective_tab_active_bg, effective_tab_active_bg, effective_tab_active_fg,

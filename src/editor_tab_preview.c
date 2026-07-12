@@ -10,6 +10,37 @@ typedef struct {
     GtkTextIter iter;
 } PreviewWriter;
 
+typedef struct {
+    GtkWidget *scrolled;
+    gdouble value;
+} PreviewScrollRestore;
+
+static gboolean preview_restore_scroll_cb(gpointer user_data) {
+    PreviewScrollRestore *restore = user_data;
+    if (!restore || !restore->scrolled) {
+        g_free(restore);
+        return G_SOURCE_REMOVE;
+    }
+    GtkAdjustment *adj = gtk_scrolled_window_get_vadjustment(
+        GTK_SCROLLED_WINDOW(restore->scrolled));
+    if (adj) {
+        gdouble max = gtk_adjustment_get_upper(adj) - gtk_adjustment_get_page_size(adj);
+        if (max < 0.0) max = 0.0;
+        gtk_adjustment_set_value(adj, CLAMP(restore->value, 0.0, max));
+    }
+    g_object_unref(restore->scrolled);
+    g_free(restore);
+    return G_SOURCE_REMOVE;
+}
+
+static void preview_restore_scroll_later(GtkWidget *scrolled, gdouble value) {
+    if (!scrolled) return;
+    PreviewScrollRestore *restore = g_new0(PreviewScrollRestore, 1);
+    restore->scrolled = g_object_ref(scrolled);
+    restore->value = value;
+    g_idle_add_full(G_PRIORITY_LOW, preview_restore_scroll_cb, restore, NULL);
+}
+
 static gboolean str_has_prefix(const char *text, const char *prefix) {
     return text && prefix && g_str_has_prefix(text, prefix);
 }
@@ -261,12 +292,18 @@ void editor_tab_update_preview(EditorTab *tab) {
         return;
     }
 
+    GtkAdjustment *adj = tab->preview_scrolled
+        ? gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(tab->preview_scrolled))
+        : NULL;
+    gdouble scroll_value = adj ? gtk_adjustment_get_value(adj) : 0.0;
+
     char *text = buffer_text(tab);
     if (!text) return;
     if (strlen(text) > PREVIEW_MAX_BYTES) {
         gtk_text_buffer_set_text(tab->preview_buffer,
                                  "Preview disabled for files over 2 MB.",
                                  -1);
+        preview_restore_scroll_later(tab->preview_scrolled, scroll_value);
         g_free(text);
         return;
     }
@@ -279,5 +316,6 @@ void editor_tab_update_preview(EditorTab *tab) {
     tab->preview_updating = FALSE;
 
     if (tab->preview_scrolled) gtk_widget_set_visible(tab->preview_scrolled, TRUE);
+    preview_restore_scroll_later(tab->preview_scrolled, scroll_value);
     g_free(text);
 }
