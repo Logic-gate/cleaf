@@ -1,6 +1,6 @@
 APP_NAME := cleaf
 APP_ID := io.github.cleaf.Editor
-VERSION := 0.16.5
+VERSION := 0.16.6
 PREFIX ?= /usr/local
 CC ?= cc
 BUILD_DIR := build
@@ -48,6 +48,8 @@ SOURCES := \
 	$(SRC_DIR)/syntax_diagnostics.c \
 	$(SRC_DIR)/dialogs.c
 
+APP_SOURCES := $(filter-out $(SRC_DIR)/main.c,$(SOURCES))
+
 ifeq ($(BUILD),debug)
 BUILD_DIR := build/debug
 CFLAGS ?= -O0 -g3 -pipe
@@ -58,6 +60,7 @@ CFLAGS ?= -O2 -g0 -pipe
 STRIP := strip --strip-unneeded
 endif
 OBJECTS := $(SOURCES:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+DEPS := $(OBJECTS:.o=.d)
 CPPFLAGS += -DAPP_VERSION=\"$(VERSION)\" -DDATADIR=\"$(DATADIR)\"
 WARNINGS := -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wformat=2 -Wundef -Wstrict-prototypes -Wmissing-prototypes
 PKG_CONFIG ?= pkg-config
@@ -80,7 +83,7 @@ GTK_SYSTEM_CFLAGS := $(foreach flag,$(GTK_CFLAGS),$(if $(filter -I%,$(flag)),-is
 GTK_LIBS := $(shell $(PKG_CONFIG) --libs $(GTK_PKG))
 LDFLAGS += -Wl,--as-needed
 
-.PHONY: all clean install uninstall size check test debug dist
+.PHONY: all clean install uninstall size check test smoke-test debug dist
 
 all: $(BUILD_DIR)/$(APP_NAME)
 
@@ -88,7 +91,7 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)
 
 $(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) $(GTK_SYSTEM_CFLAGS) -std=c11 -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) $(GTK_SYSTEM_CFLAGS) -std=c11 -MMD -MP -c $< -o $@
 
 $(BUILD_DIR)/$(APP_NAME): $(OBJECTS)
 	$(CC) $(OBJECTS) $(LDFLAGS) $(GTK_LIBS) -o $@
@@ -101,6 +104,12 @@ test: $(BUILD_DIR)/unit_tests
 	$<
 
 $(BUILD_DIR)/unit_tests: $(TEST_DIR)/unit_tests.c $(SRC_DIR)/codex_protocol.c $(SRC_DIR)/syntax_diagnostics.c | $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) $(GTK_SYSTEM_CFLAGS) -std=c11 $^ $(GTK_LIBS) -o $@
+
+smoke-test: $(BUILD_DIR)/smoke_window
+	$<
+
+$(BUILD_DIR)/smoke_window: $(TEST_DIR)/smoke_window.c $(APP_SOURCES) | $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(WARNINGS) $(GTK_SYSTEM_CFLAGS) -std=c11 $^ $(GTK_LIBS) -o $@
 
 debug:
@@ -128,3 +137,5 @@ clean:
 
 dist:
 	cd .. && tar -czf cleaf-text-editor-$(VERSION).tar.gz cleaf-$(VERSION)
+
+-include $(DEPS)

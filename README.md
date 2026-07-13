@@ -93,9 +93,26 @@ make
 ./build/cleaf
 ```
 
+To update, pull the repository, then:
+
+```bash
+make clean
+make
+./build/cleaf
+```
+
 To install Cleaf system-wide:
 
 ```bash
+make
+sudo make install
+```
+
+To update a system wide install, pull the repository, then:
+
+```bash
+sudo make uninstall
+make clean
 make
 sudo make install
 ```

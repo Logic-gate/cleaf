@@ -6,7 +6,7 @@
 #include "syntax.h"
 
 #ifndef APP_VERSION
-#define APP_VERSION "0.16.5"
+#define APP_VERSION "0.16.6"
 #endif
 
 #define CLEAF_APP_ID "io.github.cleaf.Editor"

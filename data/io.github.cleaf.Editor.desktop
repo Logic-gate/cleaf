@@ -6,4 +6,6 @@ Exec=cleaf %F
 Icon=accessories-text-editor
 Terminal=false
 Categories=Utility;TextEditor;Development;
-MimeType=text/plain;text/x-c;text/x-python;application/x-yaml;text/yaml;
+Keywords=Text;Editor;Code;Programming;Development;
+MimeType=text/plain;application/x-zerosize;
+StartupNotify=true

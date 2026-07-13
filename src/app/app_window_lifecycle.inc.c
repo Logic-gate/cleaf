@@ -186,14 +186,16 @@ EditorWindow *app_window_new(GtkApplication *application) {
     app_window_add_tab(win, tab, TRUE);
     app_window_update_ui(win);
     restart_auto_save_timer(win);
-    win->codex_client = codex_client_new(codex_status_changed, win);
-    if (win->codex_client) {
-        codex_client_set_event_func(win->codex_client,
-                                    codex_panel_handle_event);
-        char *fallback_cwd = win->project_root ? NULL : g_get_current_dir();
-        const char *cwd = win->project_root ? win->project_root : fallback_cwd;
-        codex_client_start(win->codex_client, cwd);
-        g_free(fallback_cwd);
+    if (!g_getenv("CLEAF_TEST_MODE")) {
+        win->codex_client = codex_client_new(codex_status_changed, win);
+        if (win->codex_client) {
+            codex_client_set_event_func(win->codex_client,
+                                        codex_panel_handle_event);
+            char *fallback_cwd = win->project_root ? NULL : g_get_current_dir();
+            const char *cwd = win->project_root ? win->project_root : fallback_cwd;
+            codex_client_start(win->codex_client, cwd);
+            g_free(fallback_cwd);
+        }
     }
     gtk_window_present(GTK_WINDOW(win->window));
     set_search_panel(win, FALSE, FALSE);
