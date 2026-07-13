@@ -79,6 +79,8 @@ jobs:
           ls -lh build/cleaf
 
       - name: Run window smoke tests
+        env: 
+            GTK_A11Y: none
         run: |
           xvfb-run --auto-servernum \
             make smoke-test \
